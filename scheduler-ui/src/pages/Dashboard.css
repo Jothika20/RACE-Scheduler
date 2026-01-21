@@ -1,0 +1,261 @@
+/* ========================================= */
+/* GLOBAL GLASS-MORPHISM THEME               */
+/* ========================================= */
+:root {
+    --glass-bg: rgba(255, 255, 255, 0.78);
+    --glass-border: rgba(255, 255, 255, 0.25);
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.07);
+    --primary: #ff8800;
+    --primary-hover: #ff7700;
+    --primary-active: #ff6600;
+    --text-primary: #1a1a1a;
+    --text-muted: #6b7280;
+    --bg-page: #f5f7fa;
+}
+
+/* Page background */
+body,
+html,
+#root {
+    background: var(--bg-page);
+}
+
+/* Glass container (calendar wrapper) */
+.calendar-glass-wrapper {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    padding: 20px;
+    box-shadow: var(--glass-shadow);
+    margin-top: 16px;
+}
+
+/* Header – same glass style */
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    padding: 12px 20px;
+    margin-bottom: 16px;
+    box-shadow: var(--glass-shadow);
+}
+
+/* Title */
+.dashboard-header h2 {
+    margin: 0;
+    font-weight: 700;
+    font-size: 1.5rem;
+    color: var(--text-primary);
+}
+
+/* ------------------------------------------------- */
+/* ORANGE BUTTONS – unified for every primary btn   */
+/* ------------------------------------------------- */
+.ant-btn-primary,
+.header-actions .ant-btn-primary {
+    height: 36px !important;
+    border-radius: 12px !important;
+    font-weight: 600 !important;
+    background: linear-gradient(90deg, var(--primary-active), var(--primary)) !important;
+    border: none !important;
+    color: #fff !important;
+    box-shadow: 0 4px 12px rgba(255, 136, 0, .3) !important;
+    transition: all .25s ease !important;
+    padding: 0 20px !important;
+}
+
+.ant-btn-primary:hover,
+.header-actions .ant-btn-primary:hover {
+    background: linear-gradient(90deg, var(--primary-hover), var(--primary-active)) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(255, 136, 0, .4) !important;
+}
+
+.ant-btn-primary:active,
+.header-actions .ant-btn-primary:active {
+    transform: translateY(0);
+}
+
+/* ------------------------------------------------- */
+/* FULLCALENDAR – Google/Teams look & feel          */
+/* ------------------------------------------------- */
+.fc {
+    --fc-border-color: rgba(0, 0, 0, .08);
+    --fc-daygrid-event-dot-border-color: var(--primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Header toolbar – glass buttons */
+/* ========================================= */
+/* FULLCALENDAR TOOLBAR – SPACING & LAYOUT   */
+/* ========================================= */
+
+/* Add breathing room between toolbar sections */
+.fc .fc-toolbar.fc-header-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    /* ← This creates space between chunks */
+    padding: 12px 16px !important;
+}
+
+/* Each chunk (left, center, right) */
+.fc .fc-toolbar-chunk {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    /* ← Space between buttons inside each chunk */
+}
+
+/* Optional: Make the title slightly bolder and centered */
+.fc .fc-toolbar-title {
+    font-size: 1.35rem !important;
+    font-weight: 600 !important;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+/* Ensure buttons have consistent size */
+.fc .fc-button {
+    height: 36px !important;
+    padding: 0 14px !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+}
+
+.fc .fc-button:hover {
+    background: rgba(255, 136, 0, .08) !important;
+    border-color: var(--primary) !important;
+}
+
+.fc .fc-button-primary {
+    background: var(--primary) !important;
+    border-color: var(--primary) !important;
+    color: #fff !important;
+}
+
+.fc .fc-button-primary:hover {
+    background: var(--primary-hover) !important;
+}
+
+/* Today button – orange */
+.fc .fc-today-button {
+    background: var(--primary) !important;
+    border-color: var(--primary) !important;
+}
+
+/* Day header */
+.fc .fc-col-header-cell {
+    background: rgba(255, 255, 255, .6);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Event styling – orange badge */
+.fc-event {
+    border: none !important;
+    border-radius: 8px !important;
+    background: linear-gradient(135deg, #ffaa00, #ff8800) !important;
+    color: #fff !important;
+    font-weight: 500;
+    padding: 2px 6px;
+    font-size: .85rem;
+    box-shadow: 0 2px 6px rgba(255, 136, 0, .3);
+}
+
+.fc-event:hover {
+    opacity: .9;
+    transform: translateY(-1px);
+}
+
+/* Time-grid – subtle grid */
+.fc-timegrid-axis,
+.fc-timegrid-slot-label {
+    color: var(--text-muted);
+}
+
+.fc-timegrid-col.fc-today {
+    background: rgba(255, 136, 0, .06);
+}
+
+/* ------------------------------------------------- */
+/* FORM INPUTS – clean, rounded, orange focus       */
+/* ------------------------------------------------- */
+.dashboard-form .ant-input,
+.dashboard-form .ant-input-affix-wrapper,
+.dashboard-form .ant-select-selector,
+.dashboard-form .ant-picker {
+    height: 44px !important;
+    border-radius: 12px !important;
+    border: 1.5px solid #d0d5dd !important;
+    background: #fff !important;
+    font-size: 15px !important;
+    transition: all .25s ease;
+}
+
+.dashboard-form .ant-input:focus,
+.dashboard-form .ant-input-affix-wrapper-focused,
+.dashboard-form .ant-select-focused .ant-select-selector,
+.dashboard-form .ant-picker-focused {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 4px rgba(255, 136, 0, .15) !important;
+}
+
+/* Labels */
+.dashboard-form .ant-form-item-label>label {
+    font-weight: 600 !important;
+    color: #374151 !important;
+}
+
+/* Modal – glass style */
+.dashboard-form .ant-modal {
+    border-radius: 20px;
+}
+
+.dashboard-form .ant-modal-content {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+}
+
+.dashboard-form .ant-modal-header {
+    background: transparent;
+    border-bottom: 1px solid rgba(0, 0, 0, .08);
+    border-radius: 20px 20px 0 0;
+}
+
+.dashboard-form .ant-modal-title {
+    font-weight: 700;
+    font-size: 1.35rem;
+    color: var(--text-primary);
+}
+
+/* Error block */
+.dashboard-form .form-error {
+    background: #fff2f0;
+    border: 1px solid #ffccc7;
+    color: #cf1322;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+/* ------------------------------------------------- */
+/* MISC                                             */
+/* ------------------------------------------------- */
+.ant-select-dropdown {
+    border-radius: 12px;
+    box-shadow: var(--glass-shadow);
+}
