@@ -33,7 +33,11 @@ const Dashboard: React.FC = () => {
     const [startDate, setStartDate] = useState<any>(null);
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [hasLoadedUsers, setHasLoadedUsers] = useState(false);
-    const [calendarView, setCalendarView] = useState('timeGridWeek'); // 👈 filter control
+    const [submitting, setSubmitting] = useState(false);
+    const [calendarView, setCalendarView] = useState('timeGridWeek');
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [selectedEvent, setSelectedEvent] = useState<any>(null);
 
     const token = localStorage.getItem('token');
 
@@ -59,6 +63,11 @@ const Dashboard: React.FC = () => {
                 title: e.title,
                 start: e.start_time,
                 end: e.end_time,
+                extendedProps: {
+                    status: e.status,
+                    participants: e.participants,
+                },
+                classNames: e.status === 'cancelled' ? ['cancelled-event'] : [],
             }));
             setEvents(mappedEvents);
         } catch {
@@ -89,19 +98,18 @@ const Dashboard: React.FC = () => {
 
     // ─────────── EVENT CREATION ─────────── //
     const onDateClick = (arg: DateClickArg) => {
-        if (!currentUser) {
-            message.warning('Please wait, loading user info...');
-            return;
-        }
+        if (!currentUser) return;
 
         if (
             currentUser.role === 'super_admin' ||
             hasPermission(currentUser?.permissions, 'can_create_events')
         ) {
             const clickedDate = moment(arg.date);
-            setStartDate(clickedDate);
 
-            // Critical Fix: Reset form and set initial values when opening
+            setIsEditMode(false);          // 🔥 ADD THIS
+            setSelectedEvent(null);        // 🔥 ADD THIS
+
+            setStartDate(clickedDate);
             form.resetFields();
             form.setFieldsValue({
                 date: clickedDate,
@@ -110,39 +118,59 @@ const Dashboard: React.FC = () => {
             });
 
             setIsEventModalOpen(true);
-        } else {
-            message.warning('You do not have permission to create events.');
         }
     };
 
     const onEventFinish = async (values: any) => {
+        if (submitting) return; // 🔒 block double submit
+        setSubmitting(true);
+
         try {
             setFormError(null);
+
             const date = values.date;
+
             const start = date.clone().set({
                 hour: values.start.hour(),
                 minute: values.start.minute(),
             });
+
             const end = date.clone().set({
                 hour: values.end.hour(),
                 minute: values.end.minute(),
             });
 
-            await api.post('/events/', {
+            const payload = {
                 title: values.title,
                 start_time: start.toISOString(),
                 end_time: end.toISOString(),
                 participants: values.participants || [],
-            });
+            };
 
-            message.success('Event added successfully!');
+            // 🔥 THIS IS THE CORE CHANGE
+            if (isEditMode && selectedEvent) {
+                await api.put(`/events/${selectedEvent.id}`, payload);
+                message.success('Event updated successfully!');
+            } else {
+                await api.post('/events/', payload);
+                message.success('Event added successfully!');
+            }
+
             setIsEventModalOpen(false);
-            form.resetFields(); // Clear form
-            fetchEvents(); // Refresh events
+            setIsEditMode(false);
+            setSelectedEvent(null);
+            form.resetFields();
+            fetchEvents();
+
         } catch (err: any) {
-            const apiMsg = err?.response?.data?.detail ?? 'Failed to create event';
+            const apiMsg =
+                err?.response?.data?.detail ??
+                (isEditMode ? 'Failed to update event' : 'Failed to create event');
+
             setFormError(apiMsg);
             message.error(apiMsg);
+        } finally {
+            setSubmitting(false); // 🔓 unlock
         }
     };
 
@@ -179,7 +207,12 @@ const Dashboard: React.FC = () => {
                     marginBottom: '10px',
                 }}
             >
-                <h2 style={{ margin: 0 }}>Calendar</h2>
+                <div>
+                    <h2 style={{ margin: 0 }}>RACE Scheduler</h2>
+                    <div style={{ fontSize: '13px', color: '#6b7280' }}>
+                        Team scheduling & availability management
+                    </div>
+                </div>
                 <div style={{ display: 'flex', gap: '10px' }}>
                     {/* 👇 Calendar View Filter */}
                     <Select
@@ -190,7 +223,7 @@ const Dashboard: React.FC = () => {
                         <Option value="dayGridDay">Day</Option>
                         <Option value="timeGridWeek">Week</Option>
                         <Option value="dayGridMonth">Month</Option>
-                        <Option value="listYear">Year</Option>
+                        <Option value="listYear">Year (Agenda)</Option>
                     </Select>
 
                     {hasPermission(currentUser?.permissions, 'can_create_users') && (
@@ -214,7 +247,6 @@ const Dashboard: React.FC = () => {
             </div>
 
             {/* Calendar */}
-            {/* Calendar */}
             <div className="calendar-glass-wrapper">
                 <FullCalendar
                     plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
@@ -223,26 +255,101 @@ const Dashboard: React.FC = () => {
                     dateClick={onDateClick}
                     height="auto"
                     key={calendarView}
-                    headerToolbar={{
-                        left: 'prev,next today',
-                        center: 'title',
-                        right: 'dayGridDay,timeGridWeek,dayGridMonth,listYear'
+
+                    /* ✅ SHOW FULL 24 HOURS */
+                    allDaySlot={false}
+
+                    /* ✅ TEAMS-LIKE TIME GRID */
+                    slotDuration="00:30:00"      // 30-minute slots
+                    snapDuration="00:30:00"
+                    slotLabelInterval="01:00"    // Hour labels only
+
+                    slotLabelFormat={{
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true,
                     }}
-                    buttonText={{
-                        today: 'Today',
-                        month: 'Month',
-                        week: 'Week',
-                        day: 'Day',
-                        list: 'List'
-                    }}
+
+                    headerToolbar={false}
                     dayMaxEvents={true}
                     eventDisplay="block"
+
+                    eventClick={(info) => {
+                        setSelectedEvent(info.event);
+                        setIsPreviewOpen(true);
+                    }}
                 />
             </div>
 
+            <Modal
+                title="Event Details"
+                open={isPreviewOpen}
+                onCancel={() => {
+                    setIsPreviewOpen(false);
+                    setSelectedEvent(null);
+                    setIsEditMode(false);
+                }}
+                footer={null}
+            >
+                {selectedEvent && (
+                    <>
+                        <p><strong>Title:</strong> {selectedEvent.title}</p>
+                        <p>
+                            <strong>Time:</strong>{' '}
+                            {moment(selectedEvent.start).format('DD MMM YYYY, HH:mm')} –{' '}
+                            {moment(selectedEvent.end).format('HH:mm')}
+                        </p>
+                        <p>
+                            <strong>Status:</strong>{' '}
+                            {selectedEvent.extendedProps?.status}
+                        </p>
+
+                        <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                            {selectedEvent.extendedProps?.status !== 'cancelled' && (
+                                <>
+                                    {selectedEvent.extendedProps?.status === 'active' && (
+                                        <Button
+                                            onClick={() => {
+                                                setIsEditMode(true);
+                                                setIsEventModalOpen(true);
+                                                setIsPreviewOpen(false);
+
+                                                form.setFieldsValue({
+                                                    title: selectedEvent.title,
+                                                    date: moment(selectedEvent.start),
+                                                    start: moment(selectedEvent.start),
+                                                    end: moment(selectedEvent.end),
+                                                    participants: selectedEvent.extendedProps?.participants?.map(
+                                                        (p: any) => p.id
+                                                    ),
+                                                });
+                                            }}
+                                        >
+                                            Edit
+                                        </Button>
+                                    )}
+
+                                    <Button
+                                        danger
+                                        onClick={async () => {
+                                            await api.delete(`/events/${selectedEvent.id}`);
+                                            message.success('Event cancelled');
+                                            setIsPreviewOpen(false);
+                                            fetchEvents();
+                                        }}
+                                    >
+                                        Cancel Event
+                                    </Button>
+                                </>
+                            )}
+                        </div>
+                    </>
+                )}
+            </Modal>
+
             {/* ─────────── ADD EVENT MODAL ─────────── */}
             <Modal
-                title="Add Event"
+                title={isEditMode ? "Edit Event" : "Add Event"}
                 open={isEventModalOpen}
                 onCancel={handleEventModalClose}
                 footer={null}
@@ -282,7 +389,7 @@ const Dashboard: React.FC = () => {
                     </Form.Item>
                     <Form.Item>
                         <Button type="primary" htmlType="submit" block>
-                            Add
+                            {isEditMode ? "Update Event" : "Add Event"}
                         </Button>
                     </Form.Item>
                 </Form>

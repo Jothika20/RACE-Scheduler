@@ -52,9 +52,10 @@ def _serialize_event(e: models.Event) -> Dict[str, Any]:
     return {
         "id": e.id,
         "title": e.title,
-        "start_time": e.start_time.isoformat() if isinstance(e.start_time, datetime) else e.start_time,
-        "end_time": e.end_time.isoformat() if isinstance(e.end_time, datetime) else e.end_time,
+        "start_time": e.start_time,
+        "end_time": e.end_time,
         "user_id": e.user_id,
+        "status": e.status,  # ✅ ADD THIS
         "participants": participants,
     }
 
@@ -103,3 +104,36 @@ def list_events(
 
     result = [_serialize_event(e) for e in events]
     return result
+
+@router.delete("/{event_id}")
+def cancel_event_endpoint(
+    event_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    event = crud.cancel_event(db, event_id, current_user)
+    return {"message": "Event cancelled", "event_id": event.id}
+
+@router.put("/{event_id}", response_model=schemas.EventOut)
+def update_event_endpoint(
+    event_id: int,
+    event: schemas.EventCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    updated_event = crud.update_event(db, event_id, event, current_user)
+
+    updated_event = (
+        db.query(models.Event)
+        .options(
+            joinedload(models.Event.participants)
+            .joinedload(models.User.role)
+            .joinedload(models.Role.permissions)
+        )
+        .filter(models.Event.id == updated_event.id)
+        .first()
+    )
+
+    return _serialize_event(updated_event)
+
+

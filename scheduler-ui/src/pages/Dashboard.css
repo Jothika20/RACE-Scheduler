@@ -259,3 +259,131 @@ html,
     border-radius: 12px;
     box-shadow: var(--glass-shadow);
 }
+
+/* Cancelled event styling */
+.cancelled-event {
+    background-color: #f5f5f5 !important;
+    border: 1px dashed #999 !important;
+    color: #999 !important;
+    opacity: 0.6;
+    text-decoration: line-through;
+    cursor: not-allowed;
+}
+
+/* Remove hover emphasis */
+.cancelled-event:hover {
+    background-color: #f5f5f5 !important;
+}
+
+.fc-event.cancelled-event,
+.fc-event.cancelled-event .fc-event-title,
+.fc-event.cancelled-event .fc-event-time {
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+
+/* Increase font size for better visibility */
+.fc-event {
+    font-size: 14px;
+    /* default is ~12 */
+}
+
+/* Slightly larger title */
+.fc-event-title {
+    font-weight: 500;
+}
+
+/* List view cancelled events */
+.fc-list-event.cancelled-event td {
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+
+/* Make list view text larger */
+.fc-list-event-title,
+.fc-list-event-time {
+    font-size: 15px;
+}
+
+/* ───────── Calendar Container ───────── */
+.calendar-glass-wrapper {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+}
+
+/* ───────── Time Grid Improvements ───────── */
+/* Bigger time slots (Teams-like spacing) */
+.fc-timegrid-slot {
+    height: 56px;
+    /* default ~40px, this feels right */
+}
+
+/* Time labels clarity */
+.fc-timegrid-axis {
+    font-size: 13px;
+    color: #6b7280;
+}
+
+/* Event box padding */
+.fc-event {
+    padding: 6px 8px;
+    font-size: 14px;
+    border-radius: 8px;
+}
+
+.fc-event-title {
+    font-weight: 500;
+}
+
+.fc-event-time {
+    font-size: 12px;
+    opacity: 0.85;
+}
+
+/* ───────── Cancelled Events ───────── */
+.fc-event.cancelled-event {
+    background-color: #f3f4f6 !important;
+    color: #6b7280 !important;
+    text-decoration: line-through;
+    opacity: 0.7;
+}
+
+/* ───────── List View ───────── */
+.fc-list-event-title,
+.fc-list-event-time {
+    font-size: 14px;
+}
+
+/* =============================== */
+/* TEAMS-LIKE CALENDAR SIZING ONLY */
+/* =============================== */
+
+/* 1️⃣ Make each time row taller */
+.fc-timegrid-slot {
+    height: 56px !important;
+    /* Teams ≈ 55–60px */
+}
+
+/* 2️⃣ Make events taller & centered */
+.fc-timegrid-event {
+    min-height: 56px !important;
+    padding: 8px 10px !important;
+    border-radius: 10px;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* Optional: better readability */
+.fc-timegrid-event .fc-event-title {
+    font-weight: 600;
+    white-space: normal;
+}
+
+.fc-timegrid-event .fc-event-time {
+    font-size: 12px;
+    opacity: 0.85;
+}

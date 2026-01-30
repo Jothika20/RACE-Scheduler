@@ -54,7 +54,11 @@ class User(Base):
     role = relationship("Role", backref="users", lazy="joined")
 
     # Events the user owns
-    events = relationship("Event", back_populates="owner")
+    events = relationship(
+        "Event",
+        back_populates="owner",
+        foreign_keys="Event.user_id"
+)
 
     # Events the user participates in
     participating_events = relationship(
@@ -70,17 +74,30 @@ class User(Base):
 
 class Event(Base):
     __tablename__ = "events"
-    id = Column(Integer, primary_key=True)
-    title = Column(String)
-    start_time = Column(DateTime)
-    end_time = Column(DateTime)
-    user_id = Column(Integer, ForeignKey("users.id"))
 
-    owner = relationship("User", back_populates="events")
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    start_time = Column(DateTime, nullable=False)
+    end_time = Column(DateTime, nullable=False)
 
-    # Many-to-many (participants)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # ✅ ADD THIS (THIS IS THE MISSING COLUMN)
+    status = Column(String, default="active", nullable=False)
+
+    # cancellation fields
+    cancelled_at = Column(DateTime, nullable=True)
+    cancelled_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    cancellation_reason = Column(String, nullable=True)
+
+    owner = relationship(
+        "User",
+        back_populates="events",
+        foreign_keys=[user_id]
+    )
+
     participants = relationship(
         "User",
-        secondary=event_participants,
+        secondary="event_participants",
         back_populates="participating_events"
     )

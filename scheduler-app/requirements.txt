@@ -1,7 +1,11 @@
 fastapi
 uvicorn
 sqlalchemy
-psycopg2-binary
+pydantic
+email-validator
 python-jose
 passlib[bcrypt]
-pydantic
+python-dotenv
+requests
+psycopg2-binary
+alembic

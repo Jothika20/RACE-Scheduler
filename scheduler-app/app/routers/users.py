@@ -14,6 +14,7 @@ from app import models, schemas, utils, database, auth
 from app.config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 from app.utils.permissions import has_permission
 import secrets
+from app.authz import require_action
 
 router = APIRouter(tags=["Users"])
 
@@ -67,26 +68,30 @@ def register_user(
             raise HTTPException(status_code=400, detail="Invite link expired")
         except JWTError:
             raise HTTPException(status_code=400, detail="Invalid invite link")
-    else:
-        role_name = "user"  # Default for direct registration
-
-    # --- Check if user already exists ---
-    existing = db.query(models.User).filter(models.User.email == email).first()
-
-    if existing:
-        # If it's an invited user (no password yet), activate them
-        if not existing.hashed_password:
+        
+        # Invited user registration - get or create user
+        existing = db.query(models.User).filter(models.User.email == email).first()
+        if existing:
+            # Activate the invited user by setting their name and new password
             existing.name = name
             existing.hashed_password = auth.get_password_hash(password)
-            # Set role relationship properly
             role_obj = db.query(models.Role).filter(models.Role.name == role_name).first()
-            existing.role = role_obj
+            if role_obj:
+                existing.role = role_obj
             db.commit()
             db.refresh(existing)
-            return {"message": "Registration completed for invited user"}
-
-        # Otherwise, prevent duplicate registration
-        raise HTTPException(status_code=400, detail="Email already registered")
+            return format_user_response(existing)
+        else:
+            # Shouldn't happen, but create user if missing
+            raise HTTPException(status_code=404, detail="Invite not found or invalid")
+    else:
+        # Direct registration (non-invited)
+        role_name = "user"
+        
+        # --- Check if user already exists ---
+        existing = db.query(models.User).filter(models.User.email == email).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already registered")
 
     # --- If not existing (normal registration) ---
     hashed_pw = auth.get_password_hash(password)
@@ -113,25 +118,34 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     access_token = auth.create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
 
-
-@router.put("/{user_id}/permissions", response_model=schemas.UserOut)
+@router.put(
+    "/{user_id}/permissions",
+    response_model=schemas.UserOut,
+    dependencies=[Depends(require_action("update_permissions"))],
+)
 def update_permissions(
     user_id: int,
     perm_update: schemas.UserPermissionUpdate,
     db: Session = Depends(database.get_db),
-    current_user: models.User = Depends(auth.get_current_user),
 ):
-    if not has_permission(current_user, "can_manage_users"):
-        raise HTTPException(status_code=403, detail="You lack permission to manage users")
+    """
+    Only SUPER ADMIN can update user roles.
+    Admin is explicitly blocked by authz.
+    """
 
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Change role by name -> assign Role object
-    role_obj = db.query(models.Role).filter(models.Role.name == perm_update.role).first()
+    role_obj = db.query(models.Role).filter(
+        models.Role.name == perm_update.role
+    ).first()
+
     if not role_obj:
-        raise HTTPException(status_code=400, detail=f"Role '{perm_update.role}' not found")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Role '{perm_update.role}' not found"
+        )
 
     user.role = role_obj
     db.commit()
@@ -160,75 +174,73 @@ def get_other_users(db: Session = Depends(database.get_db)):
     return result
 
 
-@router.post("/invite-user", response_model=schemas.UserOut)
+@router.post(
+    "/invite-user",
+    response_model=schemas.UserOut,
+    dependencies=[Depends(require_action("invite_user"))],
+)
 def invite_user(
     user_invite: schemas.UserInvite,
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    # Only superadmin can invite
-    if not current_user.role or current_user.role.name != "super_admin":
-        raise HTTPException(status_code=403, detail="Not authorized to invite users")
+    """
+    - Super Admin: can invite any role
+    - Admin: can invite ONLY 'user'
+    """
 
-    existing_user = db.query(models.User).filter(models.User.email == user_invite.email).first()
+    # ✅ Admin restriction
+    if current_user.role.name == "admin" and user_invite.role != "user":
+        raise HTTPException(status_code=403, detail="Admins can only invite normal users")
 
-    # find role object once
+    # ✅ Validate role
     role_obj = db.query(models.Role).filter(models.Role.name == user_invite.role).first()
     if not role_obj:
         raise HTTPException(status_code=400, detail=f"Role '{user_invite.role}' not found")
 
+    existing_user = db.query(models.User).filter(models.User.email == user_invite.email).first()
+
+    # ✅ If user already exists, just update role
     if existing_user:
-        # If existing user exists but has no password (i.e., previously invited), we can re-invite:
-        if not existing_user.hashed_password:
-            # create a temporary password and set hashed_password
-            temp_password = secrets.token_urlsafe(8)
-            existing_user.hashed_password = auth.get_password_hash(temp_password)
-            existing_user.role = role_obj
-            db.commit()
-            db.refresh(existing_user)
-
-            # create token for this invited user
-            expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-            token_data = {"sub": existing_user.email, "role": existing_user.role.name, "exp": expire}
-            token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
-
-            # print invite (or send email)
-            print(f"Re-invite link: https://localhost:3000/register?token={token}")
-            print(f"Temporary password: {temp_password} (remove printing in production)")
-
-            return format_user_response(existing_user)
-
-        # If user already fully exists, just update role (same as before)
         existing_user.role = role_obj
         db.commit()
         db.refresh(existing_user)
+
+        # ✅ Generate invite token again (re-invite)
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        token_data = {"sub": existing_user.email, "role": existing_user.role.name, "exp": expire}
+        token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
+
+        # ✅ Send email properly (token only)
+        send_invite_email(existing_user.email, token)
+
         return format_user_response(existing_user)
 
-    # New user creation: assign role object (not string).
-    # Create a temporary password and store its hash so NOT NULL constraint is satisfied.
-    temp_password = secrets.token_urlsafe(8)
+    # ✅ Create new invited user with temporary password
+    temp_password = secrets.token_urlsafe(16)
     hashed_temp = auth.get_password_hash(temp_password)
 
     new_user = models.User(
         email=user_invite.email,
         name=user_invite.email.split("@")[0],
-        hashed_password=hashed_temp,  # important: store hash, not None
+        hashed_password=hashed_temp,  # Temporary password
         role=role_obj,
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    # Generate invitation token
+    # ✅ Generate invite token
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     token_data = {"sub": new_user.email, "role": new_user.role.name, "exp": expire}
     token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
 
-    # Send email logic (optional) - adjust send_invite_email signature if needed.
-    # send_invite_email(new_user.email, token, temp_password)
-    # For now print for convenience (remove in production)
-    print(f"Invite link: https://localhost:3000/register?token={token}")
-    print(f"Temporary password: {temp_password} (remove printing in production)")
+    # ✅ Send email properly (token only)
+    send_invite_email(new_user.email, token)
+
+    # Debugging prints (optional)
+    print(f"✅ Invite sent to: {new_user.email}")
+    print(f"🔗 Invite link: http://localhost:3000/register?token={token}")
 
     return format_user_response(new_user)
 

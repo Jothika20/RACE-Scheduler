@@ -85,6 +85,8 @@ class EventCreate(EventBase):
 class EventOut(EventBase):
     id: int
     user_id: int
+    status: str
+    cancellation_reason: Optional[str] = None
     participants: List[UserOut] = []
 
     class Config:
@@ -92,7 +94,6 @@ class EventOut(EventBase):
 
     @classmethod
     def from_orm(cls, obj):
-        # Manually convert participants to UserOut properly
         participants = []
         for p in getattr(obj, "participants", []):
             participants.append(UserOut.from_orm(p))
@@ -103,6 +104,8 @@ class EventOut(EventBase):
             start_time=obj.start_time,
             end_time=obj.end_time,
             user_id=obj.user_id,
+            status=obj.status,
+            cancellation_reason=obj.cancellation_reason,
             participants=participants
         )
 
