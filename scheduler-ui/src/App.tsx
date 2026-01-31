@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
+import Home from "./pages/Home";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { attachLogoutInterceptor } from "./api/axios";
 import { message } from "antd";
@@ -23,8 +24,21 @@ const AppRoutes = () => {
 
   return (
     <Routes>
-      {/* Default redirect */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      {/* Public Home */}
+      <Route
+        path="/"
+        element={token ? <Navigate to="/dashboard" replace /> : <Home />}
+      />
+
+      {/* Public Auth Routes */}
+      <Route
+        path="/login"
+        element={token ? <Navigate to="/dashboard" replace /> : <Login />}
+      />
+      <Route
+        path="/register"
+        element={token ? <Navigate to="/dashboard" replace /> : <Register />}
+      />
 
       {/* Protected Dashboard */}
       <Route
@@ -35,10 +49,6 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
-
-      {/* Public Routes */}
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
     </Routes>
   );
 };
