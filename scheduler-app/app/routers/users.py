@@ -299,3 +299,71 @@ def get_me(current_user: models.User = Depends(auth.get_current_user)):
     # current_user should already be loaded with role+permissions by auth.get_current_user,
     # but to be safe ensure they are serializable via format_user_response
     return format_user_response(current_user)
+
+@router.put("/me", response_model=schemas.UserOut)
+def update_me(
+    user_update: schemas.UserUpdate,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Update current user's own profile
+    - Email can be changed without password verification
+    - Only password changes require current password
+    """
+    # Get the user from the current session
+    db_user = db.query(models.User).filter(
+        models.User.id == current_user.id
+    ).first()
+    
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    updated = False
+    
+    # Update email if provided (NO password verification needed)
+    if user_update.email and user_update.email != db_user.email:
+        existing = db.query(models.User).filter(
+            models.User.email == user_update.email
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already in use")
+        db_user.email = user_update.email
+        updated = True
+    
+    # Update mobile if provided
+    if user_update.mobile and user_update.mobile != db_user.mobile:
+        existing = db.query(models.User).filter(
+            models.User.mobile == user_update.mobile
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Mobile number already in use")
+        db_user.mobile = user_update.mobile
+        updated = True
+    
+    # Update name if provided
+    if user_update.name:
+        db_user.name = user_update.name
+        updated = True
+    
+    # Update password if provided (REQUIRES current password verification)
+    if user_update.new_password:
+        if not user_update.current_password:
+            raise HTTPException(
+                status_code=400, 
+                detail="Current password is required to change password"
+            )
+        
+        if not auth.verify_password(user_update.current_password, db_user.hashed_password):
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
+        
+        db_user.hashed_password = auth.get_password_hash(user_update.new_password)
+        updated = True
+    
+    if not updated:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    
+    db.commit()
+    db.refresh(db_user)
+    
+    return format_user_response(db_user)

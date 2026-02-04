@@ -52,6 +52,23 @@ class UserOut(BaseModel):
     class Config:
         from_attributes = True
 
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    mobile: Optional[str] = None
+    current_password: Optional[str] = None  # Only needed for password changes
+    new_password: Optional[str] = None
+    
+    @model_validator(mode="after")
+    def validate_password_change(self):
+        # Only require current_password if new_password is provided
+        if self.new_password and not self.current_password:
+            raise ValueError("Current password is required to set a new password")
+        return self
+    
+    class Config:
+        from_attributes = True
+
 
 # ─────────────── Token Schemas ─────────────── #
 
