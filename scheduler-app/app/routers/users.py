@@ -3,7 +3,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from typing import List
 from app import crud, schemas, models, auth
 from app.database import SessionLocal
-from app.auth import get_current_user
+from app.auth import create_access_token
 from app.crud import generate_invite_token
 from app.utils.email import send_invite_email
 from app.config import SECRET_KEY, ALGORITHM
@@ -35,6 +35,7 @@ def format_user_response(user: models.User):
         "id": user.id,
         "name": user.name,
         "email": user.email,
+        "mobile": user.mobile,
         "role": role_name,
         "permissions": permissions,
     }
@@ -50,13 +51,23 @@ def get_db():
 
 @router.post("/register")
 def register_user(
-    data: dict,
+    data: schemas.UserRegister,
     db: Session = Depends(get_db)
 ):
-    name = data.get("name")
-    email = data.get("email")
-    password = data.get("password")
-    token = data.get("token")
+    name = data.name
+    email = data.email
+    mobile = data.mobile
+    password = data.password
+    token = data.token
+    
+    if email:
+        if db.query(models.User).filter(models.User.email == email).first():
+            raise HTTPException(status_code=400, detail="Email already registered")
+
+    if mobile:
+        if db.query(models.User).filter(models.User.mobile == mobile).first():
+            raise HTTPException(status_code=400, detail="Mobile already registered")
+
 
     # --- If registering through invite link ---
     if token:
@@ -87,11 +98,6 @@ def register_user(
     else:
         # Direct registration (non-invited)
         role_name = "user"
-        
-        # --- Check if user already exists ---
-        existing = db.query(models.User).filter(models.User.email == email).first()
-        if existing:
-            raise HTTPException(status_code=400, detail="Email already registered")
 
     # --- If not existing (normal registration) ---
     hashed_pw = auth.get_password_hash(password)
@@ -102,7 +108,13 @@ def register_user(
         # fallback to a "user" role if missing
         role_obj = db.query(models.Role).filter(models.Role.name == "user").first()
 
-    new_user = models.User(name=name, email=email, hashed_password=hashed_pw, role=role_obj)
+    new_user = models.User(
+        name=data.name,
+        email=data.email,
+        mobile=data.mobile,
+        hashed_password=hashed_pw,
+        role=role_obj
+    )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
@@ -115,7 +127,9 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     user = crud.authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    access_token = auth.create_access_token(data={"sub": user.email})
+    access_token = create_access_token(
+        data={"sub": str(user.id)}
+    )
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.put(

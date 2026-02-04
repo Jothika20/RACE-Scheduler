@@ -4,9 +4,13 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import 'antd/dist/antd.min.css';
 
-const root = ReactDOM.createRoot(document.getElementById('root')!);
-root.render(
-    <BrowserRouter>
-        <App />
-    </BrowserRouter>
+const container = document.getElementById('root');
+if (!container) throw new Error("Root container missing");
+
+ReactDOM.createRoot(container).render(
+    <React.StrictMode>
+        <BrowserRouter>
+            <App />
+        </BrowserRouter>
+    </React.StrictMode>
 );

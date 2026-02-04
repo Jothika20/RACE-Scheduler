@@ -19,21 +19,6 @@ def get_db():
     finally:
         db.close()
 
-# Keep decode logic in auth.decode_access_token — reuse it
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> models.User:
-    try:
-        payload = auth.decode_access_token(token)
-        email = payload.get("sub")
-        if not email:
-            raise HTTPException(status_code=401, detail="Invalid token")
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    
-    user = crud.get_user_by_email(db, email)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user
-
 def _serialize_user(user: models.User) -> Dict[str, Any]:
     """Return simple dict for User matching UserOut: role as string and permissions dict."""
     role_name = user.role.name if user.role else None
@@ -63,7 +48,7 @@ def _serialize_event(e: models.Event) -> Dict[str, Any]:
 def create_event(
     event: schemas.EventCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(auth.get_current_user)
 ):
     # permission check
     if not has_permission(current_user, "can_create_events"):
@@ -89,7 +74,7 @@ def create_event(
 @router.get("/", response_model=List[schemas.EventOut])
 def list_events(
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(auth.get_current_user),
 ):
     # Load events where user is owner or participant; eager load role & permissions for participants
     events = (
@@ -109,7 +94,7 @@ def list_events(
 def cancel_event_endpoint(
     event_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(auth.get_current_user),
 ):
     event = crud.cancel_event(db, event_id, current_user)
     return {"message": "Event cancelled", "event_id": event.id}
@@ -119,7 +104,7 @@ def update_event_endpoint(
     event_id: int,
     event: schemas.EventCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(auth.get_current_user),
 ):
     updated_event = crud.update_event(db, event_id, event, current_user)
 

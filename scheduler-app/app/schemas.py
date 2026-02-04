@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, model_validator
 from datetime import datetime
 from typing import List, Optional, Dict
 
@@ -9,51 +9,48 @@ class UserPermissions(BaseModel):
     can_create_events: bool = False
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # ─────────────── User Schemas ─────────────── #
 
 class UserBase(BaseModel):
-    email: EmailStr
     name: str
+    email: Optional[EmailStr] = None
+    mobile: Optional[str] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
-class UserCreate(UserBase):
+class UserCreate(BaseModel):
+    name: str
+    email: Optional[EmailStr] = None
+    mobile: Optional[str] = None
     password: str
-    role: str = "user"
-    can_create_events: Optional[bool] = False
-    can_create_users: Optional[bool] = False
+
+    @model_validator(mode="after")
+    def validate_email_or_mobile(self):
+        if not self.email and not self.mobile:
+            raise ValueError("Either email or mobile must be provided")
+        return self
 
 
 class RoleOut(BaseModel):
     name: str
     class Config:
-        orm_mode = True
+        from_attributes = True
 
-
-class UserOut(UserBase):
+class UserOut(BaseModel):
     id: int
-    role: Optional[str] = None
-    permissions: Dict[str, bool] = {}
+    name: str
+    email: Optional[EmailStr]
+    mobile: Optional[str]
+    role: str
+    permissions: dict
 
     class Config:
-        orm_mode = True
-
-    @classmethod
-    def from_orm(cls, obj):
-        # Convert nested Role object to string safely
-        role_name = obj.role.name if hasattr(obj.role, "name") else obj.role
-        return cls(
-            id=obj.id,
-            email=obj.email,
-            name=obj.name,
-            role=role_name,
-            permissions=obj.permissions if hasattr(obj, "permissions") else {}
-        )
+        from_attributes = True
 
 
 # ─────────────── Token Schemas ─────────────── #
@@ -64,7 +61,7 @@ class Token(BaseModel):
 
 
 class TokenData(BaseModel):
-    email: Optional[str] = None
+    sub: Optional[str] = None 
 
 
 # ─────────────── Event Schemas ─────────────── #
@@ -75,7 +72,7 @@ class EventBase(BaseModel):
     end_time: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class EventCreate(EventBase):
@@ -90,7 +87,7 @@ class EventOut(EventBase):
     participants: List[UserOut] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
     @classmethod
     def from_orm(cls, obj):
@@ -127,4 +124,21 @@ class UserInvite(BaseModel):
     can_create_users: Optional[bool] = False
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+
+class UserRegister(BaseModel):
+    name: str
+    email: Optional[EmailStr] = None
+    mobile: Optional[str] = None
+    password: str
+    token: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_email_or_mobile(self):
+        email = getattr(self, "email", None)
+        mobile = getattr(self, "mobile", None)
+
+        if not email and not mobile:
+            raise ValueError("Either email or mobile must be provided")
+
+        return self

@@ -40,7 +40,8 @@
 .auth-card {
     width: 100%;
     max-width: 460px;
-    padding: 40px;
+    padding: 28px 28px 24px;
+    /* 👈 reduced */
     background: rgba(0, 0, 0, 0.45);
     border-radius: 16px;
     color: #fff;
@@ -48,4 +49,10 @@
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Force AntD form labels to white */
+.auth-card .ant-form-item-label>label {
+    color: #ffffff !important;
+    font-weight: 500;
 }

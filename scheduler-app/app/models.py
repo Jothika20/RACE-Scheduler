@@ -47,7 +47,8 @@ class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
-    email = Column(String, unique=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=True)
+    mobile = Column(String, unique=True, index=True, nullable=True)
     hashed_password = Column(String)
     role_id = Column(Integer, ForeignKey("roles.id"))
 
@@ -69,8 +70,10 @@ class User(Base):
 
     @property
     def permissions(self):
-        """Return a dictionary of permissions for quick frontend access."""
+        if not self.role:
+            return {}
         return {perm.key: True for perm in self.role.permissions}
+
 
 class Event(Base):
     __tablename__ = "events"

@@ -18,7 +18,8 @@ import api from '../api/axios';
 import axios from 'axios';
 import { hasPermission } from '../utils/permissions';
 import listPlugin from '@fullcalendar/list';
-import './Dashboard.css'; // 👈 Import custom CSS
+import './Dashboard.css';
+import ProfileModal from '../components/ProfileModal';
 
 const { Option } = Select;
 
@@ -38,6 +39,7 @@ const Dashboard: React.FC = () => {
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState<any>(null);
+    const [isProfileOpen, setIsProfileOpen] = useState(false);
 
     const token = localStorage.getItem('token');
 
@@ -183,9 +185,7 @@ const Dashboard: React.FC = () => {
 
     const onInviteFinish = async (values: any) => {
         try {
-            await axios.post('http://localhost:8000/users/invite-user', values, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            await api.post('/users/invite-user', values);
             message.success('User invited successfully!');
             setIsInviteModalOpen(false);
             inviteForm.resetFields();
@@ -234,6 +234,9 @@ const Dashboard: React.FC = () => {
                             Invite User
                         </Button>
                     )}
+                    <Button onClick={() => setIsProfileOpen(true)}>
+                        My Profile
+                    </Button>
                     <Button
                         className="logout-btn"
                         onClick={() => {
@@ -436,6 +439,12 @@ const Dashboard: React.FC = () => {
                     </Form.Item>
                 </Form>
             </Modal>
+            <ProfileModal
+                open={isProfileOpen}
+                onClose={() => setIsProfileOpen(false)}
+                currentUser={currentUser}
+                onUpdated={(u) => setCurrentUser(u)}
+            />
         </div>
     );
 };

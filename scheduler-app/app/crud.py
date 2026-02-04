@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from fastapi import HTTPException
 from jose import jwt
+from app.models import User
+from app.auth import verify_password
 
 from . import models, schemas
 from app.auth import get_password_hash, verify_password
@@ -15,15 +17,29 @@ from app.config import SECRET_KEY, ALGORITHM
 def get_user_by_email(db: Session, email: str):
     return db.query(models.User).filter(models.User.email == email).first()
 
+def get_user_by_identifier(db: Session, identifier: str):
+    return db.query(models.User).filter(
+        (models.User.email == identifier) | (models.User.phone == identifier)
+    ).first()
 
-def authenticate_user(db: Session, email: str, password: str):
-    user = get_user_by_email(db, email)
-    if not user or not user.hashed_password:
+
+def authenticate_user(db, identifier: str, password: str):
+    user = (
+        db.query(User)
+        .filter(
+            (User.email == identifier) |
+            (User.mobile == identifier)
+        )
+        .first()
+    )
+
+    if not user:
         return None
+
     if not verify_password(password, user.hashed_password):
         return None
-    return user
 
+    return user
 
 def create_user(db: Session, user: schemas.UserCreate):
     role = db.query(models.Role).filter(models.Role.name == user.role).first()
@@ -33,6 +49,7 @@ def create_user(db: Session, user: schemas.UserCreate):
     db_user = models.User(
         email=user.email,
         name=user.name,
+        mobile=user.mobile, 
         hashed_password=get_password_hash(user.password),
         role=role,
     )
