@@ -84,6 +84,7 @@ class Event(Base):
     end_time = Column(DateTime, nullable=False)
 
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    event_type = Column(String, default="regular", nullable=False)
 
     # ✅ ADD THIS (THIS IS THE MISSING COLUMN)
     status = Column(String, default="active", nullable=False)

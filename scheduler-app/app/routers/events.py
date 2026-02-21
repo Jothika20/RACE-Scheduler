@@ -21,16 +21,23 @@ def get_db():
 
 def _serialize_user(user: models.User) -> Dict[str, Any]:
     """Return simple dict for User matching UserOut: role as string and permissions dict."""
-    role_name = user.role.name if user.role else None
-    # role.permissions should be loaded (use joinedload when querying if needed)
-    permissions = {perm.key: True for perm in getattr(user.role, "permissions", [])} if user.role else {}
+    # Handle None role - default to "user"
+    role_name = user.role.name if user.role else "user"
+    
+    # Handle permissions - empty dict if no role
+    permissions = {}
+    if user.role and user.role.permissions:
+        permissions = {perm.key: True for perm in user.role.permissions}
+    
     return {
         "id": user.id,
         "name": user.name,
         "email": user.email,
-        "role": role_name,
+        "mobile": user.mobile,  # This can be None
+        "role": role_name,  # Always a string
         "permissions": permissions,
     }
+
 
 def _serialize_event(e: models.Event) -> Dict[str, Any]:
     participants = [_serialize_user(u) for u in getattr(e, "participants", [])]
@@ -40,7 +47,8 @@ def _serialize_event(e: models.Event) -> Dict[str, Any]:
         "start_time": e.start_time,
         "end_time": e.end_time,
         "user_id": e.user_id,
-        "status": e.status,  # ✅ ADD THIS
+        "status": e.status,
+        "event_type": e.event_type,  # ✅ ADDED THIS
         "participants": participants,
     }
 
@@ -54,8 +62,8 @@ def create_event(
     if not has_permission(current_user, "can_create_events"):
         raise HTTPException(status_code=403, detail="Not authorized to create events")
 
-    # Use your crud function (it returns an ORM Event)
-    db_event = crud.create_event(db, event, owner_id=current_user.id)
+    # Use your crud function (it handles recurrence)
+    db_event = crud.create_recurring_events(db, event, owner_id=current_user.id)
 
     # eager-load role permissions for participants might not be loaded here;
     # refresh via query to be safe (load participants -> role -> permissions)
@@ -83,6 +91,7 @@ def list_events(
         .filter(
             (models.Event.user_id == current_user.id)
             | (models.Event.participants.any(models.User.id == current_user.id))
+            | (models.Event.event_type.in_(["holiday", "weekly_off", "announced_holiday"]))
         )
         .all()
     )

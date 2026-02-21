@@ -9,9 +9,10 @@ import {
     Input,
     DatePicker,
     TimePicker,
-    message,
     Button,
     Select,
+    Checkbox, // ✅ ADDED THIS
+    App
 } from 'antd';
 import moment from 'moment';
 import api from '../api/axios';
@@ -20,10 +21,12 @@ import { hasPermission } from '../utils/permissions';
 import listPlugin from '@fullcalendar/list';
 import './Dashboard.css';
 import ProfileModal from '../components/ProfileModal';
+import { getErrorMessage } from '../utils/error';
 
 const { Option } = Select;
 
 const Dashboard: React.FC = () => {
+    const { message } = App.useApp();
     const [events, setEvents] = useState<any[]>([]);
     const [isEventModalOpen, setIsEventModalOpen] = useState(false);
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -41,6 +44,10 @@ const Dashboard: React.FC = () => {
     const [selectedEvent, setSelectedEvent] = useState<any>(null);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
 
+    // Recurrence State
+    const [isRecurring, setIsRecurring] = useState(false);
+    const [recurrenceType, setRecurrenceType] = useState('daily');
+
     const token = localStorage.getItem('token');
 
     // ─────────── FETCH CURRENT USER ─────────── //
@@ -49,18 +56,22 @@ const Dashboard: React.FC = () => {
             try {
                 const res = await api.get('/users/me');
                 setCurrentUser(res.data);
-            } catch {
-                message.error('Failed to fetch user info');
+            } catch (error: any) {
+                console.error("Fetch user error:", error);
+                // Don't show error for 401 as interceptor handles it, or if just not logged in yet
+                if (error?.response?.status !== 401) {
+                    message.error(getErrorMessage(error));
+                }
             }
         };
         fetchUser();
     }, []);
 
-    // ─────────── FETCH EVENTS ─────────── //
+    // ─────────── FETCH EVENTS ───────────
     const fetchEvents = async () => {
         try {
             const res = await api.get('/events/');
-            const mappedEvents = res.data.map((e: any) => ({
+            const mapped = res.data.map((e: any) => ({
                 id: e.id,
                 title: e.title,
                 start: e.start_time,
@@ -68,12 +79,18 @@ const Dashboard: React.FC = () => {
                 extendedProps: {
                     status: e.status,
                     participants: e.participants,
+                    event_type: e.event_type,
                 },
-                classNames: e.status === 'cancelled' ? ['cancelled-event'] : [],
+                classNames: [
+                    e.status === 'cancelled' ? 'cancelled-event' : '',
+                    ['holiday', 'weekly_off', 'announced_holiday'].includes(e.event_type) ? 'holiday-event' : '',
+                    e.event_type === 'combined' ? 'combined-event' : '',
+                ],
             }));
-            setEvents(mappedEvents);
-        } catch {
-            message.error('Failed to load events');
+            setEvents(mapped);
+        } catch (error: any) {
+            console.error("Fetch events error:", error);
+            message.error(getErrorMessage(error));
         }
     };
 
@@ -102,60 +119,160 @@ const Dashboard: React.FC = () => {
     const onDateClick = (arg: DateClickArg) => {
         if (!currentUser) return;
 
-        if (
-            currentUser.role === 'super_admin' ||
-            hasPermission(currentUser?.permissions, 'can_create_events')
-        ) {
-            const clickedDate = moment(arg.date);
+        if (!hasPermission(currentUser?.permissions, 'can_create_events'))
+            return;
 
-            setIsEditMode(false);          // 🔥 ADD THIS
-            setSelectedEvent(null);        // 🔥 ADD THIS
+        const clickedDate = moment(arg.date);
 
-            setStartDate(clickedDate);
-            form.resetFields();
-            form.setFieldsValue({
-                date: clickedDate,
-                start: clickedDate,
-                end: clickedDate.clone().add(1, 'hour'),
-            });
+        // 🚫 Block holiday scheduling in UI
+        const isHoliday = events.some(
+            (e: any) =>
+                e.extendedProps?.event_type === 'holiday' &&
+                moment(e.start).isSame(clickedDate, 'day')
+        );
 
-            setIsEventModalOpen(true);
+        if (isHoliday) {
+            message.error("Cannot create regular events on holidays");
+            return;
         }
+
+        setIsEditMode(false);
+        setSelectedEvent(null);
+        form.resetFields();
+
+        // Use the clicked date as the base for time values
+        const startTimeWithDate = clickedDate.clone().set({ hour: 10, minute: 0, second: 0, millisecond: 0 });
+        const endTimeWithDate = clickedDate.clone().set({ hour: 10, minute: 30, second: 0, millisecond: 0 });
+
+        form.setFieldsValue({
+            date: clickedDate.clone().startOf('day'), // Just the date part
+            start: startTimeWithDate, // Full datetime, but we'll extract time in submission
+            end: endTimeWithDate, // Full datetime, but we'll extract time in submission
+            event_type: "regular",
+            is_recurring: false,
+            recurrence_type: "daily",
+            recurrence_end_date: clickedDate.clone().add(1, 'week'),
+            recurrence_days: []
+        });
+
+        setIsRecurring(false);
+        setRecurrenceType('daily');
+
+        setIsEventModalOpen(true);
     };
 
+    // ─────────── SUBMIT EVENT ───────────
     const onEventFinish = async (values: any) => {
-        if (submitting) return; // 🔒 block double submit
+        console.log("===== onEventFinish called =====");
+        console.log("Form values:", values);
+        console.log("Start value type:", typeof values.start, values.start);
+        console.log("End value type:", typeof values.end, values.end);
+
+        if (submitting) return;
         setSubmitting(true);
 
         try {
             setFormError(null);
 
-            const date = values.date;
+            // Get date and time components from form
+            // Ensure we have moment objects (AntD 5 returns Dayjs)
+            const dateValue = values.date ? moment(values.date.toDate()) : null;
+            const startTime = values.start ? moment(values.start.toDate()) : null;
+            const endTime = values.end ? moment(values.end.toDate()) : null;
 
-            const start = date.clone().set({
-                hour: values.start.hour(),
-                minute: values.start.minute(),
+            console.log("dateValue (Moment):", dateValue, "isValid:", dateValue?.isValid());
+            console.log("startTime (Moment):", startTime, "isValid:", startTime?.isValid());
+            console.log("endTime (Moment):", endTime, "isValid:", endTime?.isValid());
+
+            // Validate that we have valid moment objects
+            if (!dateValue || !dateValue.isValid()) {
+                message.error("Please select a date");
+                return;
+            }
+
+            if (!startTime || !startTime.isValid()) {
+                message.error("Please select a start time");
+                return;
+            }
+
+            if (!endTime || !endTime.isValid()) {
+                message.error("Please select an end time");
+                return;
+            }
+
+            // Extract just the time components from the time pickers
+            const startHour = startTime.hour();
+            const startMinute = startTime.minute();
+            const endHour = endTime.hour();
+            const endMinute = endTime.minute();
+
+            console.log(`Extracted times - Start: ${startHour}:${startMinute}, End: ${endHour}:${endMinute}`);
+
+            // Create new moment objects for start and end by cloning the date and setting the time
+            const start = dateValue.clone().set({
+                hour: startHour,
+                minute: startMinute,
+                second: 0,
+                millisecond: 0
             });
 
-            const end = date.clone().set({
-                hour: values.end.hour(),
-                minute: values.end.minute(),
+            const end = dateValue.clone().set({
+                hour: endHour,
+                minute: endMinute,
+                second: 0,
+                millisecond: 0
             });
+
+            console.log("Start datetime:", start.format());
+            console.log("End datetime:", end.format());
+            console.log("Start ISO:", start.toISOString());
+            console.log("End ISO:", end.toISOString());
+
+            // Only check for past dates when creating new events, not when editing
+            if (!isEditMode && start.isBefore(moment())) {
+                message.error("Cannot schedule events in the past");
+                return;
+            }
+
+            if (!end.isAfter(start)) {
+                message.error("End time must be after start time");
+                return;
+            }
+
+            // Handle recurrence end date (convert Dayjs to ISO if present)
+            let recurrenceEndISO = null;
+            if (values.is_recurring && values.recurrence_end_date) {
+                // Check if it's Dayjs (from AntD) or Moment
+                // If it has .toDate(), use it
+                try {
+                    recurrenceEndISO = values.recurrence_end_date.toDate().toISOString();
+                } catch (e) {
+                    // Fallback/Safety
+                    recurrenceEndISO = moment(values.recurrence_end_date).toISOString();
+                }
+            }
 
             const payload = {
                 title: values.title,
                 start_time: start.toISOString(),
                 end_time: end.toISOString(),
                 participants: values.participants || [],
+                event_type: values.event_type || "regular",
+                // Recurrence
+                recurrence_type: values.is_recurring ? values.recurrence_type : null,
+                recurrence_end_date: recurrenceEndISO,
+                recurrence_days: values.is_recurring && values.recurrence_type === 'weekly' ? values.recurrence_days : [],
             };
 
-            // 🔥 THIS IS THE CORE CHANGE
-            if (isEditMode && selectedEvent) {
-                await api.put(`/events/${selectedEvent.id}`, payload);
-                message.success('Event updated successfully!');
+            console.log("Payload:", payload);
+
+            if (isEditMode && selectedEvent && selectedEvent.id) {
+                const eventId = parseInt(selectedEvent.id);
+                await api.put(`/events/${eventId}`, payload);
+                message.success("Event updated successfully!");
             } else {
                 await api.post('/events/', payload);
-                message.success('Event added successfully!');
+                message.success("Event added successfully!");
             }
 
             setIsEventModalOpen(false);
@@ -165,14 +282,12 @@ const Dashboard: React.FC = () => {
             fetchEvents();
 
         } catch (err: any) {
-            const apiMsg =
-                err?.response?.data?.detail ??
-                (isEditMode ? 'Failed to update event' : 'Failed to create event');
-
+            console.error("Error:", err);
+            const apiMsg = getErrorMessage(err);
             setFormError(apiMsg);
             message.error(apiMsg);
         } finally {
-            setSubmitting(false); // 🔓 unlock
+            setSubmitting(false);
         }
     };
 
@@ -181,6 +296,8 @@ const Dashboard: React.FC = () => {
         form.resetFields();
         setFormError(null);
         setStartDate(null);
+        setIsEditMode(false);
+        setSelectedEvent(null);
     };
 
     const onInviteFinish = async (values: any) => {
@@ -190,9 +307,53 @@ const Dashboard: React.FC = () => {
             setIsInviteModalOpen(false);
             inviteForm.resetFields();
         } catch (error: any) {
-            message.error(error?.response?.data?.detail || 'Failed to invite user.');
+            message.error(getErrorMessage(error));
         }
     };
+
+    // Populate form when opening in edit mode
+    // In your useEffect that populates the form
+    useEffect(() => {
+        if (isEventModalOpen && isEditMode && selectedEvent) {
+            console.log("Populating form with selectedEvent:", selectedEvent);
+
+            // Get the raw event data
+            const eventData = selectedEvent.rawData || selectedEvent;
+
+            // Create moment objects from the event data
+            const startMoment = moment(eventData.start);
+            const endMoment = moment(eventData.end);
+
+            // Create time values using the start date as reference so TimePicker works correctly
+            const startTimeWithDate = startMoment.clone().set({
+                hour: startMoment.hour(),
+                minute: startMoment.minute(),
+                second: 0,
+                millisecond: 0
+            });
+
+            const endTimeWithDate = startMoment.clone().set({
+                hour: endMoment.hour(),
+                minute: endMoment.minute(),
+                second: 0,
+                millisecond: 0
+            });
+
+            // Set form values
+            form.setFieldsValue({
+                title: eventData.title,
+                date: startMoment.clone().startOf('day'), // Just the date part
+                start: startTimeWithDate, // Full datetime for TimePicker
+                end: endTimeWithDate, // Full datetime for TimePicker
+                participants: eventData.extendedProps?.participants?.map(
+                    (p: any) => p.id
+                ),
+                event_type: eventData.extendedProps?.event_type || "regular"
+            });
+
+            console.log("Set form values - start time:", startTimeWithDate.format("HH:mm"), "end time:", endTimeWithDate.format("HH:mm"));
+        }
+    }, [isEventModalOpen, isEditMode, selectedEvent, form]);
 
     // ─────────── UI ─────────── //
     return (
@@ -278,7 +439,21 @@ const Dashboard: React.FC = () => {
                     eventDisplay="block"
 
                     eventClick={(info) => {
-                        setSelectedEvent(info.event);
+                        // Find the raw event data from your events array
+                        const rawEvent = events.find(e => e.id === info.event.id);
+
+                        // Create a combined object with both calendar event and raw data
+                        const eventWithRaw = {
+                            ...info.event,
+                            rawData: rawEvent,
+                            id: info.event.id,
+                            title: info.event.title,
+                            start: info.event.start,
+                            end: info.event.end,
+                            extendedProps: info.event.extendedProps
+                        };
+
+                        setSelectedEvent(eventWithRaw);
                         setIsPreviewOpen(true);
                     }}
                 />
@@ -314,18 +489,9 @@ const Dashboard: React.FC = () => {
                                         <Button
                                             onClick={() => {
                                                 setIsEditMode(true);
-                                                setIsEventModalOpen(true);
                                                 setIsPreviewOpen(false);
-
-                                                form.setFieldsValue({
-                                                    title: selectedEvent.title,
-                                                    date: moment(selectedEvent.start),
-                                                    start: moment(selectedEvent.start),
-                                                    end: moment(selectedEvent.end),
-                                                    participants: selectedEvent.extendedProps?.participants?.map(
-                                                        (p: any) => p.id
-                                                    ),
-                                                });
+                                                setIsEventModalOpen(true);
+                                                // Form will be populated by the useEffect
                                             }}
                                         >
                                             Edit
@@ -335,10 +501,14 @@ const Dashboard: React.FC = () => {
                                     <Button
                                         danger
                                         onClick={async () => {
-                                            await api.delete(`/events/${selectedEvent.id}`);
-                                            message.success('Event cancelled');
-                                            setIsPreviewOpen(false);
-                                            fetchEvents();
+                                            try {
+                                                await api.delete(`/events/${selectedEvent.id}`);
+                                                message.success('Event cancelled');
+                                                setIsPreviewOpen(false);
+                                                fetchEvents();
+                                            } catch (error: any) {
+                                                message.error(getErrorMessage(error));
+                                            }
                                         }}
                                     >
                                         Cancel Event
@@ -350,32 +520,74 @@ const Dashboard: React.FC = () => {
                 )}
             </Modal>
 
-            {/* ─────────── ADD EVENT MODAL ─────────── */}
+            {/* ─────────── ADD/EDIT EVENT MODAL ─────────── */}
             <Modal
                 title={isEditMode ? "Edit Event" : "Add Event"}
                 open={isEventModalOpen}
                 onCancel={handleEventModalClose}
                 footer={null}
             >
-                <Form form={form} onFinish={onEventFinish} layout="vertical" className="dashboard-form">
+                <Form
+                    form={form}
+                    onFinish={onEventFinish}
+                    layout="vertical"
+                    className="dashboard-form"
+                    onValuesChange={(changedValues) => {
+                        if (changedValues.is_recurring !== undefined) {
+                            setIsRecurring(changedValues.is_recurring);
+                        }
+                        if (changedValues.recurrence_type !== undefined) {
+                            setRecurrenceType(changedValues.recurrence_type);
+                        }
+                    }}
+                >
                     {formError && (
                         <div style={{ color: 'red', marginBottom: '10px' }}>{formError}</div>
                     )}
                     <Form.Item
                         label="Event Title"
                         name="title"
-                        rules={[{ required: true, message: 'Please enter event title' }]}
+                        rules={[{ required: true }]}
                     >
-                        <Input placeholder="Meeting with client, Team standup, etc." />
+                        <Input />
                     </Form.Item>
+
+                    {/* ✅ EVENT TYPE */}
+                    <Form.Item
+                        label="Event Type"
+                        name="event_type"
+                        initialValue="regular"
+                    >
+                        <Select>
+                            <Option value="regular">Regular</Option>
+                            <Option value="combined">Combined Batch</Option>
+
+                            {(currentUser?.role === 'admin' ||
+                                currentUser?.role === 'super_admin') && (
+                                    <>
+                                        <Option value="holiday">Holiday</Option>
+                                        <Option value="weekly_off">Weekly Off</Option>
+                                        <Option value="announced_holiday">
+                                            Announced Holiday
+                                        </Option>
+                                    </>
+                                )}
+                        </Select>
+                    </Form.Item>
+
                     <Form.Item
                         label="Date"
                         name="date"
-                        initialValue={startDate}
                         rules={[{ required: true }]}
                     >
-                        <DatePicker style={{ width: '100%' }} />
+                        <DatePicker
+                            style={{ width: '100%' }}
+                            disabledDate={(current) =>
+                                current && current < moment().startOf('day')
+                            }
+                        />
                     </Form.Item>
+
                     <Form.Item name="participants" label="Invite Users">
                         <Select
                             mode="multiple"
@@ -384,17 +596,87 @@ const Dashboard: React.FC = () => {
                             onFocus={fetchUsers}
                         />
                     </Form.Item>
+
+                    {/* 30-minute enforced */}
                     <Form.Item label="Start Time" name="start" rules={[{ required: true }]}>
-                        <TimePicker format="HH:mm" />
+                        <TimePicker
+                            format="HH:mm"
+                            minuteStep={30}
+                            hideDisabledOptions
+                            disabledTime={() => ({
+                                disabledMinutes: () =>
+                                    Array.from({ length: 60 }, (_, i) => i)
+                                        .filter(m => m !== 0 && m !== 30)
+                            })}
+                        />
                     </Form.Item>
+
                     <Form.Item label="End Time" name="end" rules={[{ required: true }]}>
-                        <TimePicker format="HH:mm" />
+                        <TimePicker
+                            format="HH:mm"
+                            minuteStep={30}
+                            hideDisabledOptions
+                            disabledTime={() => ({
+                                disabledMinutes: () =>
+                                    Array.from({ length: 60 }, (_, i) => i)
+                                        .filter(m => m !== 0 && m !== 30)
+                            })}
+                        />
                     </Form.Item>
-                    <Form.Item>
-                        <Button type="primary" htmlType="submit" block>
-                            {isEditMode ? "Update Event" : "Add Event"}
-                        </Button>
+
+                    {/* RECURRENCE SECTION */}
+                    <Form.Item name="is_recurring" valuePropName="checked">
+                        <Checkbox>Repeat Event</Checkbox>
                     </Form.Item>
+
+                    {isRecurring && (
+                        <div style={{ border: '1px solid #eee', padding: '10px', borderRadius: '4px', marginBottom: '15px' }}>
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <Form.Item
+                                    label="Recurrence Type"
+                                    name="recurrence_type"
+                                    style={{ flex: 1 }}
+                                    rules={[{ required: true, message: 'Select type' }]}
+                                >
+                                    <Select>
+                                        <Option value="daily">Daily</Option>
+                                        <Option value="weekly">Weekly</Option>
+                                    </Select>
+                                </Form.Item>
+
+                                <Form.Item
+                                    label="End Date"
+                                    name="recurrence_end_date"
+                                    style={{ flex: 1 }}
+                                    rules={[{ required: true, message: 'Select end date' }]}
+                                >
+                                    <DatePicker
+                                        style={{ width: '100%' }}
+                                        disabledDate={(current) =>
+                                            current && current < moment().startOf('day')
+                                        }
+                                    />
+                                </Form.Item>
+                            </div>
+
+                            {recurrenceType === 'weekly' && (
+                                <Form.Item
+                                    label="Repeat On"
+                                    name="recurrence_days"
+                                    rules={[{ required: true, message: 'Select at least one day' }]}
+                                >
+                                    <Checkbox.Group options={[
+                                        'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
+                                    ]} />
+                                </Form.Item>
+                            )}
+                        </div>
+                    )}
+
+                    <Button type="primary" htmlType="submit" block loading={submitting}>
+                        {isEditMode ? "Update Event" : "Add Event"}
+                    </Button>
+
                 </Form>
             </Modal>
 

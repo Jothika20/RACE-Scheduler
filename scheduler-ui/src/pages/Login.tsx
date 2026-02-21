@@ -1,14 +1,17 @@
 import { useState } from 'react';
-import { Form, Input, Button, message, Spin, Card } from 'antd';
+import { Form, Input, Button, Spin, Card, App } from 'antd';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import './Login.css'; // 👈 Add custom CSS for styling
 import { useAuth } from '../context/AuthContext';
 
+import { getErrorMessage } from '../utils/error';
+
 const Login = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const { login } = useAuth();
+    const { message } = App.useApp();
 
 
     const onFinish = async (values: any) => {
@@ -27,8 +30,8 @@ const Login = () => {
             localStorage.setItem('token', res.data.access_token);
             message.success('Login successful');
             navigate('/dashboard', { replace: true });
-        } catch (err) {
-            message.error('Invalid credentials');
+        } catch (err: any) {
+            message.error(getErrorMessage(err));
         } finally {
             setLoading(false);
         }
@@ -55,11 +58,11 @@ const Login = () => {
                 <h2 className="login-title">REVA Academy for Corporate Excellence</h2>
                 <Form onFinish={onFinish} layout="vertical">
                     <Form.Item
-                        label={<span className="form-label">Email</span>}
+                        label={<span className="form-label">Username</span>}
                         name="username"
-                        rules={[{ required: true, message: 'Please enter your email' }]}
+                        rules={[{ required: true, message: 'Please enter your email or phone' }]}
                     >
-                        <Input placeholder="Enter email" />
+                        <Input placeholder="Enter email or phone" />
                     </Form.Item>
 
                     <Form.Item

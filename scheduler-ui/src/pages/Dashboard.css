@@ -387,3 +387,20 @@ html,
     font-size: 12px;
     opacity: 0.85;
 }
+
+.holiday-event {
+    background-color: #52c41a !important;
+    /* Green */
+    border: none !important;
+}
+
+.combined-event {
+    background-color: #722ed1 !important;
+    /* Purple */
+    border: none !important;
+}
+
+.cancelled-event {
+    background-color: #999 !important;
+    text-decoration: line-through;
+}

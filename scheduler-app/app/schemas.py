@@ -87,6 +87,7 @@ class EventBase(BaseModel):
     title: str
     start_time: datetime
     end_time: datetime
+    event_type: str = "regular"
 
     class Config:
         from_attributes = True
@@ -94,6 +95,9 @@ class EventBase(BaseModel):
 
 class EventCreate(EventBase):
     participants: Optional[List[int]] = []
+    recurrence_type: Optional[str] = None  # "daily", "weekly", "monthly"
+    recurrence_end_date: Optional[datetime] = None
+    recurrence_days: Optional[List[str]] = []  # ["Monday", "Tuesday"]
 
 
 class EventOut(EventBase):
@@ -119,6 +123,7 @@ class EventOut(EventBase):
             end_time=obj.end_time,
             user_id=obj.user_id,
             status=obj.status,
+            event_type=obj.event_type,  # ✅ ADDED THIS
             cancellation_reason=obj.cancellation_reason,
             participants=participants
         )

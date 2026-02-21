@@ -26,17 +26,20 @@ def format_user_response(user: models.User):
         id, name, email, role (string), permissions (dict[str,bool])
       }
     """
+    # Handle None role - default to "user"
     role_name = user.role.name if user.role else "user"
 
     # Build a dict of all permissions this role has: { "can_x": True, ... }
-    permissions = {perm.key: True for perm in user.role.permissions} if user.role else {}
+    permissions = {}
+    if user.role and user.role.permissions:
+        permissions = {perm.key: True for perm in user.role.permissions}
 
     return {
         "id": user.id,
         "name": user.name,
         "email": user.email,
-        "mobile": user.mobile,
-        "role": role_name,
+        "mobile": user.mobile,  # This can be None
+        "role": role_name,  # Always a string
         "permissions": permissions,
     }
 
@@ -122,15 +125,24 @@ def register_user(
     return {"message": "Registration successful"}
 
 
+# In routers/users.py - Update login endpoint
 @router.post("/login", response_model=schemas.Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = crud.authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": str(user.id)}
+        data={"sub": str(user.id)},
+        expires_delta=access_token_expires  # Pass the expires_delta
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    
+    # Make sure this matches what frontend expects
+    return {
+        "access_token": access_token, 
+        "token_type": "bearer"
+    }
 
 @router.put(
     "/{user_id}/permissions",
@@ -177,16 +189,23 @@ def get_other_users(db: Session = Depends(database.get_db)):
 
     result = []
     for user in users:
-        permissions_dict = {perm.key: True for perm in user.role.permissions} if user.role else {}
+        # Handle None role
+        role_name = user.role.name if user.role else "user"  # Default to "user" if no role
+        
+        # Handle permissions - empty dict if no role
+        permissions_dict = {}
+        if user.role and user.role.permissions:
+            permissions_dict = {perm.key: True for perm in user.role.permissions}
+        
         result.append({
             "id": user.id,
             "email": user.email,
             "name": user.name,
-            "role": user.role.name if user.role else None,
+            "mobile": user.mobile,  # This can be None, which is fine for Optional[str]
+            "role": role_name,  # Always a string, never None
             "permissions": permissions_dict,
         })
     return result
-
 
 @router.post(
     "/invite-user",

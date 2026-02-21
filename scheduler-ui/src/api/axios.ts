@@ -13,6 +13,13 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
+// Local variable to hold the message instance
+let messageApi: any = null;
+
+export const injectMessage = (msg: any) => {
+    messageApi = msg;
+};
+
 export const attachLogoutInterceptor = (logout: () => void) => {
     api.interceptors.response.use(
         (response) => response,
@@ -21,7 +28,11 @@ export const attachLogoutInterceptor = (logout: () => void) => {
             const detail = error?.response?.data?.detail;
 
             if (status === 401 && detail?.toLowerCase().includes('expired')) {
-                message.error('Session expired. Please log in again.');
+                if (messageApi) {
+                    messageApi.error('Session expired. Please log in again.');
+                } else {
+                    console.error('Session expired. Please log in again.');
+                }
                 logout(); // 🔹 Calls context logout → navigates
             }
             return Promise.reject(error);
