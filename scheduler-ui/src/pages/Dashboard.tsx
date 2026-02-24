@@ -11,8 +11,10 @@ import {
     TimePicker,
     Button,
     Select,
-    Checkbox, // ✅ ADDED THIS
-    App
+    Checkbox,
+    App,
+    Avatar,
+    Dropdown,
 } from 'antd';
 import moment from 'moment';
 import api from '../api/axios';
@@ -22,6 +24,8 @@ import listPlugin from '@fullcalendar/list';
 import './Dashboard.css';
 import ProfileModal from '../components/ProfileModal';
 import { getErrorMessage } from '../utils/error';
+import { } from "antd";
+import { UserOutlined, LogoutOutlined } from "@ant-design/icons";
 
 const { Option } = Select;
 
@@ -43,10 +47,16 @@ const Dashboard: React.FC = () => {
     const [isEditMode, setIsEditMode] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState<any>(null);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
+    // 🔎 Search & Filter States
+    const [searchText, setSearchText] = useState('');
+    const [filterType, setFilterType] = useState<'session' | 'participant' | 'date'>('session');
+    const [selectedDate, setSelectedDate] = useState<any>(null);
 
     // Recurrence State
     const [isRecurring, setIsRecurring] = useState(false);
     const [recurrenceType, setRecurrenceType] = useState('daily');
+    const [allUsers, setAllUsers] = useState<any[]>([]);
+    const [isManageUsersOpen, setIsManageUsersOpen] = useState(false);
 
     const token = localStorage.getItem('token');
 
@@ -100,15 +110,18 @@ const Dashboard: React.FC = () => {
 
     // ─────────── FETCH USERS ─────────── //
     const fetchUsers = async () => {
-        if (hasLoadedUsers) return;
         try {
             const res = await api.get('/users');
+
+            setAllUsers(res.data); // ✅ full users list
+
             setUserOptions(
                 res.data.map((u: any) => ({
                     label: u.name,
                     value: u.id,
                 }))
             );
+
             setHasLoadedUsers(true);
         } catch {
             console.error('Failed to fetch users');
@@ -163,10 +176,6 @@ const Dashboard: React.FC = () => {
 
     // ─────────── SUBMIT EVENT ───────────
     const onEventFinish = async (values: any) => {
-        console.log("===== onEventFinish called =====");
-        console.log("Form values:", values);
-        console.log("Start value type:", typeof values.start, values.start);
-        console.log("End value type:", typeof values.end, values.end);
 
         if (submitting) return;
         setSubmitting(true);
@@ -179,10 +188,6 @@ const Dashboard: React.FC = () => {
             const dateValue = values.date ? moment(values.date.toDate()) : null;
             const startTime = values.start ? moment(values.start.toDate()) : null;
             const endTime = values.end ? moment(values.end.toDate()) : null;
-
-            console.log("dateValue (Moment):", dateValue, "isValid:", dateValue?.isValid());
-            console.log("startTime (Moment):", startTime, "isValid:", startTime?.isValid());
-            console.log("endTime (Moment):", endTime, "isValid:", endTime?.isValid());
 
             // Validate that we have valid moment objects
             if (!dateValue || !dateValue.isValid()) {
@@ -206,8 +211,6 @@ const Dashboard: React.FC = () => {
             const endHour = endTime.hour();
             const endMinute = endTime.minute();
 
-            console.log(`Extracted times - Start: ${startHour}:${startMinute}, End: ${endHour}:${endMinute}`);
-
             // Create new moment objects for start and end by cloning the date and setting the time
             const start = dateValue.clone().set({
                 hour: startHour,
@@ -222,11 +225,6 @@ const Dashboard: React.FC = () => {
                 second: 0,
                 millisecond: 0
             });
-
-            console.log("Start datetime:", start.format());
-            console.log("End datetime:", end.format());
-            console.log("Start ISO:", start.toISOString());
-            console.log("End ISO:", end.toISOString());
 
             // Only check for past dates when creating new events, not when editing
             if (!isEditMode && start.isBefore(moment())) {
@@ -263,8 +261,6 @@ const Dashboard: React.FC = () => {
                 recurrence_end_date: recurrenceEndISO,
                 recurrence_days: values.is_recurring && values.recurrence_type === 'weekly' ? values.recurrence_days : [],
             };
-
-            console.log("Payload:", payload);
 
             if (isEditMode && selectedEvent && selectedEvent.id) {
                 const eventId = parseInt(selectedEvent.id);
@@ -311,11 +307,41 @@ const Dashboard: React.FC = () => {
         }
     };
 
+    const filteredEvents = events.filter((event: any) => {
+
+        // If filtering by session title
+        if (filterType === 'session') {
+            return (
+                !searchText ||
+                event.title?.toLowerCase().includes(searchText.toLowerCase())
+            );
+        }
+
+        // If filtering by participant
+        if (filterType === 'participant') {
+            return (
+                !searchText ||
+                event.extendedProps?.participants?.some((p: any) =>
+                    p.name?.toLowerCase().includes(searchText.toLowerCase())
+                )
+            );
+        }
+
+        // If filtering by date
+        if (filterType === 'date') {
+            return (
+                !selectedDate ||
+                moment(event.start).isSame(selectedDate, 'day')
+            );
+        }
+
+        return true;
+    });
+
     // Populate form when opening in edit mode
     // In your useEffect that populates the form
     useEffect(() => {
         if (isEventModalOpen && isEditMode && selectedEvent) {
-            console.log("Populating form with selectedEvent:", selectedEvent);
 
             // Get the raw event data
             const eventData = selectedEvent.rawData || selectedEvent;
@@ -351,9 +377,27 @@ const Dashboard: React.FC = () => {
                 event_type: eventData.extendedProps?.event_type || "regular"
             });
 
-            console.log("Set form values - start time:", startTimeWithDate.format("HH:mm"), "end time:", endTimeWithDate.format("HH:mm"));
         }
     }, [isEventModalOpen, isEditMode, selectedEvent, form]);
+
+    const profileMenu = {
+        items: [
+            {
+                key: "profile",
+                label: "My Profile",
+                onClick: () => setIsProfileOpen(true),
+            },
+            {
+                key: "logout",
+                label: "Logout",
+                icon: <LogoutOutlined />,
+                onClick: () => {
+                    localStorage.removeItem('token');
+                    window.location.href = '/login';
+                },
+            },
+        ],
+    };
 
     // ─────────── UI ─────────── //
     return (
@@ -369,7 +413,15 @@ const Dashboard: React.FC = () => {
                 }}
             >
                 <div>
-                    <h2 style={{ margin: 0 }}>RACE Scheduler</h2>
+                    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
+                        <img
+                            src="/images/reva-spinner.webp"
+                            alt=""
+                            className="reva-spinner"
+                            style={{ width: '28px', height: '28px' }}
+                        />
+                        <h2 style={{ margin: 0 }}>RACE Scheduler</h2>
+                    </div>
                     <div style={{ fontSize: '13px', color: '#6b7280' }}>
                         Team scheduling & availability management
                     </div>
@@ -395,10 +447,25 @@ const Dashboard: React.FC = () => {
                             Invite User
                         </Button>
                     )}
-                    <Button onClick={() => setIsProfileOpen(true)}>
-                        My Profile
-                    </Button>
-                    <Button
+                    {hasPermission(currentUser?.permissions, 'can_manage_roles') && (
+                        <Button
+                            onClick={() => {
+                                fetchUsers();
+                                setIsManageUsersOpen(true);
+                            }}
+                        >
+                            Manage Users
+                        </Button>
+                    )}
+                    <Dropdown menu={profileMenu} placement="bottomRight">
+                        <Avatar
+                            size={32}
+                            style={{ backgroundColor: 'white', color: "#ff8a00", border: '2px solid #ff8a00', cursor: "pointer" }}
+                        >
+                            {currentUser?.name?.charAt(0).toUpperCase()}
+                        </Avatar>
+                    </Dropdown>
+                    {/* <Button
                         className="logout-btn"
                         onClick={() => {
                             localStorage.removeItem('token');
@@ -406,8 +473,57 @@ const Dashboard: React.FC = () => {
                         }}
                     >
                         Logout
-                    </Button>
+                    </Button> */}
                 </div>
+            </div>
+
+            {/* 🔎 SEARCH & FILTER BAR */}
+            <div
+                style={{
+                    display: 'flex',
+                    gap: '10px',
+                    marginBottom: '15px',
+                    alignItems: 'center'
+                }}
+            >
+                {/* Filter Type Selector */}
+                <Select
+                    value={filterType}
+                    onChange={(val) => {
+                        setFilterType(val);
+                        setSearchText('');
+                        setSelectedDate(null);
+                    }}
+                    style={{ width: 180 }}
+                >
+                    <Option value="session">Filter by Session</Option>
+                    <Option value="participant">Filter by Participant</Option>
+                    <Option value="date">Filter by Date</Option>
+                </Select>
+
+                {/* Dynamic Field */}
+                {filterType !== 'date' ? (
+                    <Input.Search
+                        placeholder={`Search ${filterType}...`}
+                        allowClear
+                        style={{ width: 250 }}
+                        onChange={(e) => setSearchText(e.target.value)}
+                    />
+                ) : (
+                    <DatePicker
+                        onChange={(date) => setSelectedDate(date)}
+                    />
+                )}
+
+                {/* Clear Button */}
+                <Button
+                    onClick={() => {
+                        setSearchText('');
+                        setSelectedDate(null);
+                    }}
+                >
+                    Clear
+                </Button>
             </div>
 
             {/* Calendar */}
@@ -415,7 +531,7 @@ const Dashboard: React.FC = () => {
                 <FullCalendar
                     plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
                     initialView={calendarView}
-                    events={events}
+                    events={filteredEvents}
                     dateClick={onDateClick}
                     height="auto"
                     key={calendarView}
@@ -720,6 +836,58 @@ const Dashboard: React.FC = () => {
                         </Button>
                     </Form.Item>
                 </Form>
+            </Modal>
+            <Modal
+                title="Manage Users"
+                open={isManageUsersOpen}
+                onCancel={() => setIsManageUsersOpen(false)}
+                footer={null}
+            >
+                {allUsers
+                    .filter((user) => user.id !== currentUser?.id)
+                    .map((user) => (
+                        <div
+                            key={user.id}
+                            style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                marginBottom: 12,
+                                alignItems: "center"
+                            }}
+                        >
+                            <div>
+                                <strong>{user.name}</strong>
+                                <div style={{ fontSize: 12, color: "#888" }}>
+                                    {user.email}
+                                </div>
+                            </div>
+
+                            <Select
+                                value={user.role}
+                                style={{ width: 150 }}
+                                onChange={async (newRole) => {
+                                    if (user.id === currentUser.id) {
+                                        message.warning("You cannot change your own role");
+                                        return;
+                                    }
+
+                                    try {
+                                        await api.put(`/users/${user.id}/permissions`, {
+                                            role: newRole
+                                        });
+                                        message.success("Role updated");
+                                        fetchUsers();
+                                    } catch (error: any) {
+                                        message.error(getErrorMessage(error));
+                                    }
+                                }}
+                            >
+                                <Option value="user">User</Option>
+                                <Option value="admin">Admin</Option>
+                                <Option value="super_admin">Super Admin</Option>
+                            </Select>
+                        </div>
+                    ))}
             </Modal>
             <ProfileModal
                 open={isProfileOpen}

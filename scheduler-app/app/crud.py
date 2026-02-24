@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from jose import jwt
 from app.models import User
 from sqlalchemy import func
+import secrets
 
 from . import models, schemas
 from app.auth import get_password_hash, verify_password
@@ -89,6 +90,68 @@ def create_invited_user(db: Session, user: schemas.UserInvite):
     db.commit()
     db.refresh(db_user)
     return db_user
+
+
+# =====================================================
+# PASSWORD RESET FUNCTIONS
+# =====================================================
+
+def generate_password_reset_token(db: Session, identifier: str):
+    """Generate a password reset token for user (email or phone)"""
+    # Find user by email or phone
+    user = db.query(models.User).filter(
+        models.User.email == identifier
+    ).first()
+    
+    if not user:
+        # Don't reveal if user exists or not for security
+        raise HTTPException(status_code=400, detail="If an account exists, a reset link will be sent")
+    
+    # Generate a unique token (random string)
+    reset_token = secrets.token_urlsafe(32)
+    
+    # Set token expiry to 1 hour from now
+    token_expiry = datetime.utcnow() + timedelta(hours=1)
+    
+    # Store token in database
+    user.password_reset_token = reset_token
+    user.password_reset_token_expiry = token_expiry
+    
+    db.commit()
+    db.refresh(user)
+    
+    return user, reset_token
+
+
+def verify_password_reset_token(db: Session, token: str):
+    """Verify password reset token and return user if valid"""
+    user = db.query(models.User).filter(
+        models.User.password_reset_token == token
+    ).first()
+    
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid reset token")
+    
+    # Check if token has expired
+    if not user.password_reset_token_expiry or user.password_reset_token_expiry < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Reset token has expired")
+    
+    return user
+
+
+def reset_password(db: Session, token: str, new_password: str):
+    """Reset user password using valid token"""
+    user = verify_password_reset_token(db, token)
+    
+    # Update password and clear reset token
+    user.hashed_password = get_password_hash(new_password)
+    user.password_reset_token = None
+    user.password_reset_token_expiry = None
+    
+    db.commit()
+    db.refresh(user)
+    
+    return user
 
 
 # =====================================================

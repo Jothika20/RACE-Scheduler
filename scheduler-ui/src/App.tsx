@@ -3,6 +3,8 @@ import { useEffect } from "react";
 import { App as AntdApp, message } from "antd";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import Home from "./pages/Home";
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -41,6 +43,14 @@ const AppRoutes = () => {
       <Route
         path="/register"
         element={token ? <Navigate to="/dashboard" replace /> : <Register />}
+      />
+      <Route
+        path="/forgot-password"
+        element={token ? <Navigate to="/dashboard" replace /> : <ForgotPassword />}
+      />
+      <Route
+        path="/reset-password"
+        element={token ? <Navigate to="/dashboard" replace /> : <ResetPassword />}
       />
 
       {/* Protected Dashboard */}

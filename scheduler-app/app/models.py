@@ -47,10 +47,14 @@ class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
-    email = Column(String, unique=True, index=True, nullable=True)
+    email = Column(String, unique=True, index=True, nullable=False)
     mobile = Column(String, unique=True, index=True, nullable=True)
     hashed_password = Column(String)
     role_id = Column(Integer, ForeignKey("roles.id"))
+    
+    # Password reset fields
+    password_reset_token = Column(String, nullable=True, unique=True)
+    password_reset_token_expiry = Column(DateTime, nullable=True)
 
     role = relationship("Role", backref="users", lazy="joined")
 

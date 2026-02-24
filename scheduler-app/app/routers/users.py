@@ -5,7 +5,7 @@ from app import crud, schemas, models, auth
 from app.database import SessionLocal
 from app.auth import create_access_token
 from app.crud import generate_invite_token
-from app.utils.email import send_invite_email
+from app.utils.email import send_invite_email, send_password_reset_email
 from app.config import SECRET_KEY, ALGORITHM
 from fastapi import APIRouter, Depends, HTTPException, status
 from datetime import datetime, timedelta
@@ -63,9 +63,8 @@ def register_user(
     password = data.password
     token = data.token
     
-    if email:
-        if db.query(models.User).filter(models.User.email == email).first():
-            raise HTTPException(status_code=400, detail="Email already registered")
+    if db.query(models.User).filter(models.User.email == email).first():
+        raise HTTPException(status_code=400, detail="Email already registered")
 
     if mobile:
         if db.query(models.User).filter(models.User.mobile == mobile).first():
@@ -386,3 +385,42 @@ def update_me(
     db.refresh(db_user)
     
     return format_user_response(db_user)
+
+
+@router.post("/forgot-password", response_model=schemas.PasswordResetResponse)
+def forgot_password(
+    request: schemas.PasswordResetRequest,
+    db: Session = Depends(get_db)
+):
+    try:
+        user, reset_token = crud.generate_password_reset_token(
+            db, request.email
+        )
+
+        # Send proper reset link (NOT raw token)
+        send_password_reset_email(user.email, reset_token)
+
+    except HTTPException:
+        pass  # Always return same message (security)
+
+    return schemas.PasswordResetResponse(
+        message="If an account exists, a password reset link has been sent",
+        success=True
+    )
+
+@router.post("/reset-password", response_model=schemas.PasswordResetResponse)
+def reset_password(
+    request: schemas.PasswordResetVerify,
+    db: Session = Depends(get_db)
+):
+    """
+    Reset password using valid reset token.
+    """
+    try:
+        crud.reset_password(db, request.token, request.new_password)
+        return schemas.PasswordResetResponse(
+            message="Password has been reset successfully",
+            success=True
+        )
+    except HTTPException as e:
+        raise e

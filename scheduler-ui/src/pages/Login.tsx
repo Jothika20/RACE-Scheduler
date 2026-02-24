@@ -78,6 +78,16 @@ const Login = () => {
                             Login
                         </Button>
                     </Form.Item>
+
+                    <div style={{ textAlign: 'center', marginTop: '15px' }}>
+                        <Button
+                            type="link"
+                            onClick={() => navigate('/forgot-password')}
+                            style={{ padding: 0 }}
+                        >
+                            Forgot Password?
+                        </Button>
+                    </div>
                 </Form>
             </Card>
         </div>

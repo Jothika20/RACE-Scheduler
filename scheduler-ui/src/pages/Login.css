@@ -84,10 +84,19 @@ html {
     font-weight: 500;
 }
 
-/* Input fields - only inside login */
+/* ===== FIX DOUBLE BORDER ISSUE ===== */
+
+/* Remove background + border from wrapper */
+.login-container .ant-input-password {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+
+/* Apply styling ONLY to actual input */
 .login-container .ant-input,
-.login-container .ant-input-password,
-.login-container .ant-input-password .ant-input {
+.login-container .ant-input-password input {
     background: rgba(255, 255, 255, 0.12) !important;
     border: 1px solid rgba(255, 255, 255, 0.3) !important;
     color: #fff !important;
@@ -97,16 +106,31 @@ html {
     font-size: 15px;
 }
 
-.login-container .ant-input::placeholder,
-.login-container .ant-input-password .ant-input::placeholder {
-    color: rgba(255, 255, 255, 0.6) !important;
-}
-
+/* Focus effect */
 .login-container .ant-input:focus,
-.login-container .ant-input-password .ant-input:focus {
+.login-container .ant-input-password input:focus {
     border-color: #ff8800 !important;
     box-shadow: 0 0 0 3px rgba(255, 136, 0, 0.25) !important;
     background: rgba(255, 255, 255, 0.18) !important;
+}
+
+/* Fix placeholder color */
+.login-container .ant-input::placeholder,
+.login-container .ant-input-password input::placeholder {
+    color: rgba(255, 255, 255, 0.8) !important;
+    opacity: 1 !important;
+    /* ensures full visibility */
+}
+
+/* For better browser compatibility */
+.login-container .ant-input::-webkit-input-placeholder,
+.login-container .ant-input-password input::-webkit-input-placeholder {
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.login-container .ant-input:-ms-input-placeholder,
+.login-container .ant-input-password input:-ms-input-placeholder {
+    color: rgba(255, 255, 255, 0.8) !important;
 }
 
 /* Password eye icon */

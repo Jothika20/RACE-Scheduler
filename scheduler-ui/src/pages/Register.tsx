@@ -6,15 +6,12 @@ import "../styles/auth-background.css";
 
 interface RegisterFormValues {
     name: string;
-    email?: string;
-    mobile?: string;
+    email: string;
     password: string;
 }
 
 const Register: React.FC = () => {
     const [loading, setLoading] = useState(false);
-    const [registerMethod, setRegisterMethod] = useState<"email" | "mobile">("email");
-
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -25,15 +22,9 @@ const Register: React.FC = () => {
         try {
             setLoading(true);
 
-            if (!values.email && !values.mobile) {
-                message.error("Email or Mobile number is required");
-                return;
-            }
-
             await axios.post("http://localhost:8000/users/register", {
                 name: values.name,
-                email: values.email ?? null,
-                mobile: values.mobile ?? null,
+                email: values.email,
                 password: values.password,
                 token: inviteToken,
             });
@@ -42,7 +33,7 @@ const Register: React.FC = () => {
             navigate("/login");
         } catch (error: any) {
             message.error(
-                error?.response?.data?.message || "Registration failed"
+                error?.response?.data?.detail || "Registration failed"
             );
         } finally {
             setLoading(false);
@@ -59,24 +50,6 @@ const Register: React.FC = () => {
                     borderBottom: "1px solid rgba(255,255,255,0.1)",
                 }}
             >
-                {/* Email / Mobile Toggle */}
-                <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
-                    <Button
-                        block
-                        type={registerMethod === "email" ? "primary" : "default"}
-                        onClick={() => setRegisterMethod("email")}
-                    >
-                        Email
-                    </Button>
-                    <Button
-                        block
-                        type={registerMethod === "mobile" ? "primary" : "default"}
-                        onClick={() => setRegisterMethod("mobile")}
-                    >
-                        Mobile
-                    </Button>
-                </div>
-
                 <Form layout="vertical" onFinish={onFinish}>
                     <Form.Item
                         label="Full Name"
@@ -86,34 +59,16 @@ const Register: React.FC = () => {
                         <Input />
                     </Form.Item>
 
-                    {registerMethod === "email" && (
-                        <Form.Item
-                            label="Email Address"
-                            name="email"
-                            rules={[
-                                { required: true, message: "Email is required" },
-                                { type: "email", message: "Enter a valid email" },
-                            ]}
-                        >
-                            <Input />
-                        </Form.Item>
-                    )}
-
-                    {registerMethod === "mobile" && (
-                        <Form.Item
-                            label="Mobile Number"
-                            name="mobile"
-                            rules={[
-                                { required: true, message: "Mobile number is required" },
-                                {
-                                    pattern: /^[0-9]{10}$/,
-                                    message: "Enter valid 10-digit mobile number",
-                                },
-                            ]}
-                        >
-                            <Input />
-                        </Form.Item>
-                    )}
+                    <Form.Item
+                        label="Email Address"
+                        name="email"
+                        rules={[
+                            { required: true, message: "Email is required" },
+                            { type: "email", message: "Enter a valid email" },
+                        ]}
+                    >
+                        <Input />
+                    </Form.Item>
 
                     <Form.Item
                         label="Password"

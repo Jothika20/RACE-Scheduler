@@ -71,3 +71,49 @@ def send_event_cancel_email(
             server.login(sender_email, sender_password)
             server.sendmail(sender_email, to_email, message.as_string())
 
+
+def send_password_reset_email(to_email: str, reset_token: str):
+    """Send password reset email with reset link"""
+    sender_email = os.getenv("EMAIL_HOST_USER")
+    sender_password = os.getenv("EMAIL_HOST_PASSWORD")
+    smtp_host = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+    smtp_port = int(os.getenv("EMAIL_PORT", "465"))
+
+    reset_link = f"http://localhost:3000/reset-password?token={reset_token}"
+
+    message = MIMEMultipart("alternative")
+    message["Subject"] = "Password Reset Request"
+    message["From"] = sender_email
+    message["To"] = to_email
+
+    text = f"""You requested to reset your password. 
+Click the link below to reset it:
+{reset_link}
+
+This link will expire in 1 hour.
+If you didn't request this, please ignore this email."""
+
+    html = f"""
+    <html>
+      <body>
+        <p>You requested to reset your password.<br>
+           Click the link below to reset it:<br>
+           <a href="{reset_link}">Reset Password</a>
+        </p>
+        <p>This link will expire in 1 hour.</p>
+        <p>If you didn't request this, please ignore this email.</p>
+      </body>
+    </html>
+    """
+
+    message.attach(MIMEText(text, "plain"))
+    message.attach(MIMEText(html, "html"))
+
+    try:
+        with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
+            server.login(sender_email, sender_password)
+            server.sendmail(sender_email, to_email, message.as_string())
+        print(f"Password reset email sent to {to_email}")
+    except Exception as e:
+        print(f"Error sending password reset email to {to_email}: {e}")
+

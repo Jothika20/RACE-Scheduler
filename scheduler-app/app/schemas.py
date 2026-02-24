@@ -16,7 +16,7 @@ class UserPermissions(BaseModel):
 
 class UserBase(BaseModel):
     name: str
-    email: Optional[EmailStr] = None
+    email: EmailStr
     mobile: Optional[str] = None
 
     class Config:
@@ -25,7 +25,7 @@ class UserBase(BaseModel):
 
 class UserCreate(BaseModel):
     name: str
-    email: Optional[EmailStr] = None
+    email: EmailStr
     mobile: Optional[str] = None
     password: str
 
@@ -44,7 +44,7 @@ class RoleOut(BaseModel):
 class UserOut(BaseModel):
     id: int
     name: str
-    email: Optional[EmailStr]
+    email: EmailStr
     mobile: Optional[str]
     role: str
     permissions: dict
@@ -79,6 +79,27 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     sub: Optional[str] = None 
+
+
+# ─────────────── Password Reset Schemas ─────────────── #
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetVerify(BaseModel):
+    """Verify reset token and set new password"""
+    token: str
+    new_password: str
+
+
+class PasswordResetResponse(BaseModel):
+    """Response for password reset requests"""
+    message: str
+    success: bool
+
+
+
 
 
 # ─────────────── Event Schemas ─────────────── #
@@ -133,8 +154,6 @@ class EventOut(EventBase):
 
 class UserPermissionUpdate(BaseModel):
     role: str
-    can_create_users: bool
-    can_create_events: bool
 
 
 # ─────────────── Invite User Schema ─────────────── #
@@ -150,7 +169,7 @@ class UserInvite(BaseModel):
 
 class UserRegister(BaseModel):
     name: str
-    email: Optional[EmailStr] = None
+    email: EmailStr
     mobile: Optional[str] = None
     password: str
     token: Optional[str] = None
