@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import './Login.css';
 import { getErrorMessage } from '../utils/error';
+import api from '../api/axios';
 
 const ResetPassword = () => {
     const navigate = useNavigate();
@@ -28,7 +29,7 @@ const ResetPassword = () => {
 
         try {
             setLoading(true);
-            await axios.post('http://localhost:8000/users/reset-password', {
+            await api.post('/users/reset-password', {
                 token: token,
                 new_password: values.password,
             });

@@ -243,9 +243,10 @@ def invite_user(
         token_data = {"sub": existing_user.email, "role": existing_user.role.name, "exp": expire}
         token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
 
-        # ✅ Send email properly (token only)
+        # ✅ Send invite email (handles FRONTEND_URL internally)
         send_invite_email(existing_user.email, token)
 
+        print(f"✅ Invite sent to: {existing_user.email}")
         return format_user_response(existing_user)
 
     # ✅ Create new invited user with temporary password
@@ -255,7 +256,7 @@ def invite_user(
     new_user = models.User(
         email=user_invite.email,
         name=user_invite.email.split("@")[0],
-        hashed_password=hashed_temp,  # Temporary password
+        hashed_password=hashed_temp,
         role=role_obj,
     )
     db.add(new_user)
@@ -267,15 +268,11 @@ def invite_user(
     token_data = {"sub": new_user.email, "role": new_user.role.name, "exp": expire}
     token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
 
-    # ✅ Send email properly (token only)
+    # ✅ Send invite email (handles FRONTEND_URL internally)
     send_invite_email(new_user.email, token)
 
-    # Debugging prints (optional)
     print(f"✅ Invite sent to: {new_user.email}")
-    print(f"🔗 Invite link: http://localhost:3000/register?token={token}")
-
     return format_user_response(new_user)
-
 
 @router.post("/register-from-invite", response_model=schemas.UserOut)
 def register_from_invite(

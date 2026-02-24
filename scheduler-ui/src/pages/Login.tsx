@@ -6,6 +6,7 @@ import './Login.css'; // 👈 Add custom CSS for styling
 import { useAuth } from '../context/AuthContext';
 
 import { getErrorMessage } from '../utils/error';
+import api from '../api/axios';
 
 const Login = () => {
     const navigate = useNavigate();
@@ -21,7 +22,7 @@ const Login = () => {
             params.append('username', values.username);
             params.append('password', values.password);
 
-            const res = await axios.post('http://localhost:8000/users/login', params, {
+            const res = await api.post('/users/login', params, {
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },

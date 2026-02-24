@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import './Login.css';
 import { getErrorMessage } from '../utils/error';
+import api from '../api/axios';
 
 const ForgotPassword = () => {
     const navigate = useNavigate();
@@ -23,7 +24,7 @@ const ForgotPassword = () => {
                 payload.mobile = values.identifier;
             }
 
-            await axios.post('http://localhost:8000/users/forgot-password', payload);
+            await api.post('/users/forgot-password', payload);
             message.success('Reset link sent! Check your email.');
             setSubmitted(true);
 

@@ -3,6 +3,7 @@ import { Form, Input, Button, message, Card } from "antd";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import "../styles/auth-background.css";
+import api from "../api/axios";
 
 interface RegisterFormValues {
     name: string;
@@ -22,7 +23,7 @@ const Register: React.FC = () => {
         try {
             setLoading(true);
 
-            await axios.post("http://localhost:8000/users/register", {
+            await api.post("/users/register", {
                 name: values.name,
                 email: values.email,
                 password: values.password,
